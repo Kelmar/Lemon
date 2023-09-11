@@ -1,3 +1,13 @@
+; ************************************************************************
+; Project: Lemon - Simple 6502 Monitor
+; Author: Bryce Simonds
+; License: BSD 3-Clause
+; File: header.inc
+; Description: Memory map and basic system layout.
+;
+; Copyright (c) 2023
+; ************************************************************************
+
 .memorymap
     DEFAULTSLOT 4
 
@@ -34,3 +44,5 @@ MAP 'A' = 65
 
 .bank 0 SLOT 4
 .org 0
+
+; ************************************************************************
