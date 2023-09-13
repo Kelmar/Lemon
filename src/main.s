@@ -8,12 +8,18 @@
 ; Copyright (c) 2023
 ; ************************************************************************
 
-.include "header.inc"
 .include "zp.inc"
+
+.import serial_recv_byte_sync
+.import serial_send_byte
+.import serial_send_str
+.import serial_init
+
+.segment "STARTUP"
 
 ; ************************************************************************
 
-start:
+.proc start: near
     ; Disable interrupts, set binary mode, initialize the stack
     sei
     cld
@@ -22,27 +28,27 @@ start:
 
     jsr serial_init
 
-    LDW0 greeting
+    lda #<greeting
+    ldx #>greeting
+
     jsr serial_send_str
 
 @main_loop:
-    nop
+    ; Just echo all bytes back to user
+    jsr serial_recv_byte_sync
+    jsr serial_send_byte
+
     jmp @main_loop
-
-; ************************************************************************
-; Stub function for kernel jump table.
-; This is a safety function for if a rogue program jumps to a bad table entry.
-
-stub:
-    rts
+.endproc
 
 ; ************************************************************************
 ; Return the jump table version number in the A register.
 ;
 
-get_version:
+.proc get_version: near
     lda #1
     rts
+.endproc
 
 ; ************************************************************************
 ; Normal interrupt handler.
@@ -59,25 +65,28 @@ nmi_service:
     nop
     jmp nmi_service
 
-; ************************************************************************
-; String constants
-greeting: .ascstr "Lemon v0.1\n", $0
+
 
 ; ************************************************************************
 ; Kernel jump table
-.org $1F00
-vectors:
-.word get_version
 
-; Fill the remainder of the jump table with our stub function.
-.dsw 63, stub
+.segment "KERNJUMP"
+
+.word get_version
 
 ; ************************************************************************
 ; Vectors for interrupts
 
-.org $1FFA
+.segment "VECTORS"
 .word nmi_service
 .word start
 .word irq_service
+
+; ************************************************************************
+; String constants
+
+.segment "RODATA"
+
+greeting: .byte "Lemon v0.1.2", $D, $0
 
 ; ************************************************************************

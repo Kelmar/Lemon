@@ -8,48 +8,49 @@
 ; Copyright (c) 2023
 ; ************************************************************************
 
-.include "header.inc"
 .include "zp.inc"
 
-.section "serial" free
+.segment "CODE"
 
 ; ************************************************************************
 
 ; Base address of the serial port.
-.def SERIAL_BASE $8400
+.define SERIAL_BASE $8400
 
 ; Only when DLAB = 0
-.def SERIAL_TRX       SERIAL_BASE + $00
+.define SERIAL_TRX       SERIAL_BASE + $00
 
 ; Only when DLAB = 0
-.def SERIAL_INT_CTL   SERIAL_BASE + $01
+.define SERIAL_INT_CTL   SERIAL_BASE + $01
 
 ; Only when DLAB = 1
-.def SERIAL_DLA_LSB   SERIAL_BASE + $00
+.define SERIAL_DLA_LSB   SERIAL_BASE + $00
 
 ; Only when DLAB = 1
-.def SERIAL_DLA_MSB   SERIAL_BASE + $01
+.define SERIAL_DLA_MSB   SERIAL_BASE + $01
 
 ; Read only
-.def SERIAL_INT_STAT  SERIAL_BASE + $02
+.define SERIAL_INT_STAT  SERIAL_BASE + $02
 
 ; Write only
-.def SERIAL_FIFO_CTL  SERIAL_BASE + $02
-.def SERIAL_LINE_CTL  SERIAL_BASE + $03
-.def SERIAL_MOD_CTL   SERIAL_BASE + $04
-.def SERIAL_LINE_STAT SERIAL_BASE + $05
-.def SERIAL_MOD_STAT  SERIAL_BASE + $06
-.def SERIAL_SCRATCH   SERIAL_BASE + $07
+.define SERIAL_FIFO_CTL  SERIAL_BASE + $02
+.define SERIAL_LINE_CTL  SERIAL_BASE + $03
+.define SERIAL_MOD_CTL   SERIAL_BASE + $04
+.define SERIAL_LINE_STAT SERIAL_BASE + $05
+.define SERIAL_MOD_STAT  SERIAL_BASE + $06
+.define SERIAL_SCRATCH   SERIAL_BASE + $07
 
-.def SERIAL_DLA_BIT   $80
+.define SERIAL_DLA_BIT   $80
 
 ; TODO: Pass this in as a parameter
-.def SERIAL_CONTROL_FLAGS %00001011
+.define SERIAL_CONTROL_FLAGS %00001011
 
 ; ************************************************************************
 ; Initializes the UART
 
-serial_init:
+.export serial_init
+
+.proc serial_init: near
     pha
 
     ; Disable interrupts from 16550
@@ -76,12 +77,15 @@ serial_init:
 
     pla
     rts
+.endproc
 
 ; ************************************************************************
 ; Sends a single byte in A register to the UART
 ; Blocks until the UART's fifo is empty.
 
-serial_send_byte:
+.export serial_send_byte
+
+.proc serial_send_byte: near
     pha ; Save the byte
 
 @tx_delay:
@@ -94,13 +98,16 @@ serial_send_byte:
     sta SERIAL_TRX
 
     rts
+.endproc
 
 ; ************************************************************************
 ; Reads a single byte from the UART into the A register
 ; Does not block, if a character is read then 1 is returned in the Y register
 ; Other wise 0 is returned to indicate no character read.
 
-serial_recv_byte_async:
+.export serial_recv_byte_async
+
+.proc serial_recv_byte_async: near
     lda #$01
     and SERIAL_LINE_STAT
     beq @no_char
@@ -116,18 +123,22 @@ serial_recv_byte_async:
 
 @done:
     rts
+.endproc
 
 ; ************************************************************************
 ; Receive a byte from the UART into the A register
 ; Blocks until byte is received.
 
-serial_recv_byte_sync:
+.export serial_recv_byte_sync
+
+.proc serial_recv_byte_sync: near
     lda #$01
     and SERIAL_LINE_STAT
     beq serial_recv_byte_sync ; Loop until we have byte
 
     lda SERIAL_TRX  ; Read byte and return
     rts
+.endproc
 
 ; ************************************************************************
 ; Sends a null terminated string to the UART.
@@ -135,7 +146,9 @@ serial_recv_byte_sync:
 ; String cannot be longer than 255 bytes.
 ; Method blocks
 
-serial_send_str:
+.export serial_send_str
+
+.proc serial_send_str: near
     pha
     phy
     phx
@@ -166,6 +179,7 @@ serial_send_str:
     ply
     pla
     rts
+.endproc
 
 ; ************************************************************************
 ; Sends a byte buffer to the UART.
@@ -173,13 +187,15 @@ serial_send_str:
 ; Buffer length is in the Y register.
 ; Method blocks
 
-serial_send_buffer:
+.export serial_send_buffer
+
+.proc serial_send_buffer: near
     pha
     phy
     phx
 
-    PHR0
-    sty R0
+    ;PHR0
+    ;sty R0
 
     beq @tx_exit        ; No data to send
 
@@ -198,7 +214,7 @@ serial_send_buffer:
     lda (W0),y          ; Load next character
     sta SERIAL_TRX      ; Write character to TRX port.
     iny
-    dec R0
+    ;dec R0
     beq @tx_exit        ; Reached end of buffer, exit.
     dex
     beq @tx_delay       ; We've possibly filled the TX buffer, wait for it to empty.
@@ -206,15 +222,12 @@ serial_send_buffer:
 
 @tx_exit:
 
-    PLR0
+    ;PLR0
 
     plx
     ply
     pla
     rts
-
-; ************************************************************************
-
-.ends
+.endproc
 
 ; ************************************************************************
