@@ -43,6 +43,7 @@
 .define SERIAL_DLA_BIT   $80
 
 ; TODO: Pass this in as a parameter
+; 8 data, 1 stop, odd parity
 .define SERIAL_CONTROL_FLAGS %00001011
 
 ; ************************************************************************
@@ -51,8 +52,6 @@
 .export serial_init
 
 .proc serial_init: near
-    pha
-
     ; Disable interrupts from 16550
     stz SERIAL_INT_CTL
 
@@ -75,7 +74,6 @@
     lda #SERIAL_CONTROL_FLAGS
     sta SERIAL_LINE_CTL
 
-    pla
     rts
 .endproc
 
@@ -145,14 +143,12 @@
 ; String is pointed to by the W0 register
 ; String cannot be longer than 255 bytes.
 ; Method blocks
+;
+; Destroys: A, Y, X
 
 .export serial_send_str
 
 .proc serial_send_str: near
-    pha
-    phy
-    phx
-
     ldy #0
 
 @tx_delay:
@@ -174,10 +170,6 @@
     jmp @tx_loop_send
 
 @tx_exit:
-
-    plx
-    ply
-    pla
     rts
 .endproc
 
@@ -190,11 +182,6 @@
 .export serial_send_buffer
 
 .proc serial_send_buffer: near
-    pha
-    phy
-    phx
-
-    ;PHR0
     ;sty R0
 
     beq @tx_exit        ; No data to send
@@ -222,11 +209,6 @@
 
 @tx_exit:
 
-    ;PLR0
-
-    plx
-    ply
-    pla
     rts
 .endproc
 

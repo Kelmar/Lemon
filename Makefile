@@ -20,7 +20,7 @@ $(BUILDDIR):
 	mkdir $(BUILDDIR)
 
 $(BUILDDIR)/%.o: $(SRCPATH)/%.s $(BUILDDIR)
-	${AS} ${ASFLAGS} --debug-info -o $@ $<
+	${AS} ${ASFLAGS} -l $(BUILDDIR)/$*.lst --debug-info -o $@ $<
 
 lemon.rom lemon.sym: $(OBJS) src/lemon.cfg
 	${LD} ${LDFLAGS} $(OBJS) -C src/lemon.cfg -o lemon.rom

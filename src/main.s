@@ -29,7 +29,9 @@
     jsr serial_init
 
     lda #<greeting
-    ldx #>greeting
+    sta W0
+    lda #>greeting
+    sta W0 + 1
 
     jsr serial_send_str
 
