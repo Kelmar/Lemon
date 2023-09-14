@@ -13,6 +13,7 @@
 .segment "CODE"
 
 .export byte2dec
+.export strcmp
 .export memcpy
 .export memcpy_down
 .export memcpy_up
@@ -81,6 +82,35 @@ byte2dec:
     rts
 
 dec_consts: .byte 128, 160, 200
+
+; ************************************************************************
+; Compares two NULL terminated strings W0 with W1.
+;
+; Sets status bits based on if they are equal or not.
+;
+; Destroys: A, Y
+;
+strcmp:
+    ldy #0
+
+@cmp_loop:
+    lda (W0),y
+    cmp (W1),y
+    bne @done
+
+    cmp #0 
+    beq @done ; Hit NULL, end loop
+
+    iny
+    bne @cmp_loop
+
+    inc W0 + 1
+    inc W1 + 1
+
+    bra @cmp_loop
+
+@done
+    rts
 
 ; ************************************************************************
 ; Copy memory from one location W0 to another W1.  With the number of bytes
