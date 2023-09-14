@@ -12,6 +12,14 @@
 
 .segment "CODE"
 
+.export serial_init
+.export serial_send_byte
+.export serial_recv_byte_async
+.export serial_recv_byte_sync
+.export serial_send_str
+.export serial_send_buffer
+.export serial_print_hex
+
 ; ************************************************************************
 
 ; Base address of the serial port.
@@ -48,8 +56,8 @@
 
 ; ************************************************************************
 ; Initializes the UART
-
-.export serial_init
+;
+; Destroys: A
 
 .proc serial_init: near
     ; Disable interrupts from 16550
@@ -81,8 +89,6 @@
 ; Sends a single byte in A register to the UART
 ; Blocks until the UART's fifo is empty.
 
-.export serial_send_byte
-
 .proc serial_send_byte: near
     pha ; Save the byte
 
@@ -101,9 +107,7 @@
 ; ************************************************************************
 ; Reads a single byte from the UART into the A register
 ; Does not block, if a character is read then 1 is returned in the Y register
-; Other wise 0 is returned to indicate no character read.
-
-.export serial_recv_byte_async
+; Otherwise 0 is returned to indicate no character read.
 
 .proc serial_recv_byte_async: near
     lda #$01
@@ -127,8 +131,6 @@
 ; Receive a byte from the UART into the A register
 ; Blocks until byte is received.
 
-.export serial_recv_byte_sync
-
 .proc serial_recv_byte_sync: near
     lda #$01
     and SERIAL_LINE_STAT
@@ -145,8 +147,6 @@
 ; Method blocks
 ;
 ; Destroys: A, Y, X
-
-.export serial_send_str
 
 .proc serial_send_str: near
     ldy #0
@@ -179,8 +179,6 @@
 ; Buffer length is in the Y register.
 ; Method blocks
 
-.export serial_send_buffer
-
 .proc serial_send_buffer: near
     ;sty R0
 
@@ -211,5 +209,48 @@
 
     rts
 .endproc
+
+; ************************************************************************
+; Prints the A register as a 2-digit hex number
+;
+; Destroys: W0
+
+serial_print_hex:
+    phx
+    phy
+
+    ldx #<hexbytes
+    stx W0
+    ldx #>hexbytes
+    stx W0 + 1
+
+    tax ; Preserve A
+
+    ror
+    ror
+    ror
+    ror
+    and #$0F
+
+    tay
+    lda (W0), y
+    jsr serial_send_byte
+
+    txa
+    and #$0F
+
+    tay
+    lda (W0), y
+    jsr serial_send_byte
+
+    ply
+    plx
+    rts
+
+; ************************************************************************
+
+.segment "RODATA"
+
+hexbytes:     .byte "0123456789ABCDEF"
 
 ; ************************************************************************

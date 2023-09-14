@@ -9,11 +9,9 @@
 ; ************************************************************************
 
 .include "zp.inc"
+.include "serial.inc"
 
-.import serial_recv_byte_sync
-.import serial_send_byte
-.import serial_send_str
-.import serial_init
+.import editline
 
 .segment "STARTUP"
 
@@ -35,21 +33,20 @@
 
     jsr serial_send_str
 
+    ldx #0
+
 @main_loop:
-    ; Just echo all bytes back to user
-    jsr serial_recv_byte_sync
-    jsr serial_send_byte
+    lda #<prompt
+    sta W0
+    lda #>prompt
+    sta W0 + 1
+
+    jsr serial_send_str
+
+    jsr editline
 
     jmp @main_loop
-.endproc
 
-; ************************************************************************
-; Return the jump table version number in the A register.
-;
-
-.proc get_version: near
-    lda #1
-    rts
 .endproc
 
 ; ************************************************************************
@@ -67,15 +64,6 @@ nmi_service:
     nop
     jmp nmi_service
 
-
-
-; ************************************************************************
-; Kernel jump table
-
-.segment "KERNJUMP"
-
-.word get_version
-
 ; ************************************************************************
 ; Vectors for interrupts
 
@@ -89,6 +77,7 @@ nmi_service:
 
 .segment "RODATA"
 
-greeting: .byte "Lemon v0.1.2", $D, $0
+greeting: .byte $1B, "c", $1B, "[2jLemon v0.1.2", $D, $0
+prompt  : .byte "> ", $0
 
 ; ************************************************************************

@@ -17,30 +17,39 @@
 .define ROMBANK $01
 
 ; ************************************************************************
-; Kernel scratch registers.
+; Parameter registers.
 
-; 8-bit register
+; 8-bit parameter
 .define R0 $02
 
-; 8-bit register
+; 8-bit parameter
 .define R1 $03
 
-; 8-bit reigster
+; 8-bit parameter
 .define R2 $04
 
-; 8-bit reigster
+; 8-bit parameter
 .define R3 $05
 
-; 16-bit reigster
+; 16-bit parameter
 .define W0 $06
 
-; 16-bit reigster
+; 16-bit parameter
 .define W1 $08
 
-; 32-bit reigster
-.define Q0 $0A
+; 16-bit parameter
+.define W2 $0A
 
-; A save space for stack manipulation
-.define ASAV $0E
+; 32-bit parameter
+.define Q0 $0C
+
+; Scratch space for saving the A register.
+.importzp TMP_A
+
+; Scratch space for preserving Y register
+.importzp TMP_Y
+
+; Scratch space for preserving X register
+.importzp TMP_X
 
 ; ************************************************************************
