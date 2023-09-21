@@ -53,3 +53,30 @@
 .importzp TMP_X
 
 ; ************************************************************************
+
+.macro PHR0
+    stx TMP_X
+    sta TMP_A
+    phx
+    tsx
+    lda R0
+    sta $0100,x
+    lda TMP_A
+    ldx TMP_X
+.endmacro
+
+.macro PHR0_fast
+    phx
+    tsx
+    lda R0
+    sta $0100,x
+.endmacro
+
+.macro PLR0
+    sta TMP_A
+    pla
+    sta R0
+    lda TMP_A
+.endmacro
+
+; ************************************************************************

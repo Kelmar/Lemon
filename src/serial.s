@@ -178,9 +178,17 @@
 ; Buffer is pointed to by the W0 register
 ; Buffer length is in the Y register.
 ; Method blocks
+;
+; Destroys: A
 
 .proc serial_send_buffer: near
-    ;sty R0
+    phx
+    PHR0_fast
+    
+    ; I'd kill for a nice DMA to do this. :3
+
+    tya
+    tax
 
     beq @tx_exit        ; No data to send
 
@@ -193,20 +201,23 @@
     beq @tx_delay
 
     ; Not quite the full size of the FIFO
-    ldx #15
+    lda #15
+    sta R0
 
 @tx_loop_send:
     lda (W0),y          ; Load next character
     sta SERIAL_TRX      ; Write character to TRX port.
     iny
-    ;dec R0
-    beq @tx_exit        ; Reached end of buffer, exit.
     dex
+    beq @tx_exit        ; Reached end of buffer, exit.
+    dec R0
     beq @tx_delay       ; We've possibly filled the TX buffer, wait for it to empty.
     jmp @tx_loop_send
 
 @tx_exit:
 
+    PLR0
+    plx
     rts
 .endproc
 

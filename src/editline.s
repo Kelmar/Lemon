@@ -10,16 +10,26 @@
 
 .include "zp.inc"
 .include "serial.inc"
+.include "hotkey.inc"
 
 .import byte2dec
+.import ansi_recv
 
 .segment "EDITVARS"
 
-; Buffer for editor
-buffer: .res 160
+.define BUFFER_SIZE 160
+
+; Gap buffer for line editor
+buffer: .res BUFFER_SIZE
 
 ; Buffer for ANSI escape code generation
-ansicode: .res 32
+ansicode: .res 16
+
+; Start of gap in buffer
+gap_start: .res 1
+
+; End of gap in buffer
+gap_end: .res 1
 
 .segment "CODE"
 
@@ -33,14 +43,15 @@ editline:
     ldy #0
     ldx #0
 
-    bra @get_next_char
+    ; Clear out the buffer
+    stz buffer
+    stz gap_start
+    stz gap_end
 
-@unknown:
-    jsr print_unknown
-    
 @get_next_char:
-    ; Just echo all bytes back to user
-    jsr serial_recv_byte_sync
+    jsr ansi_recv
+
+    bcs @state_special_key
 
     cmp #1 ; CTRL+A
     beq @home_key
@@ -58,32 +69,41 @@ editline:
     beq @backspace_key
 
     cmp #10 ; CR
-    bne @check_lf
-    jsr serial_send_byte
-    rts
+    beq @enter_key
 
-@check_lf:
     cmp #13 ; LF
-    bne @check_escape
-    jsr serial_send_byte
-    rts
+    beq @enter_key
 
-@check_escape:
-    cmp #27
-    beq @handle_escape
-    
     cmp #$20
-    bcc @unknown ; Ignore control characters
-
-    jsr serial_send_byte
+    bcc @get_next_char ; Ignore any other control characters
 
     ; TODO: Insert into buffer here.
-
-    ; Echo the byte back to the UART
     iny
     inx
-    
+
+    ; Echo the character back to the user
+    jsr serial_send_byte
+
+@state_special_key:
+    cmp KEY_LEFT
+    beq @left_key
+
+    cmp KEY_RIGHT
+    beq @right_key
+
+    cmp KEY_HOME
+    beq @home_key
+
+    cmp KEY_END
+    beq @end_key
+
+    ; Ignore any other special keys and continue.
     bra @get_next_char
+
+@enter_key:
+    ; TODO: Finalize buffer and return it to the caller.
+    jsr serial_send_byte
+    rts
 
 @backspace_key:
     cpy #0
@@ -148,99 +168,34 @@ editline:
     lda #1
     jsr move_left
 
-    bra @get_next_char
-
-@handle_escape:
-    jsr serial_recv_byte_sync
-
-    cmp #'['
-    jmp @unknown ; Unknown escape sequence, ignore and continue
-
-    jsr serial_recv_byte_sync
-    ;cmp #'A'
-    ;beq @up_key
-
-    ;cmp #'B'
-    ;beq @down_key
-
-    cmp #'C'
-    beq @right_key
-
-    cmp #'D'
-    beq @left_key
-
-    cmp #'O'
-    beq @try_extended_key
-
-    ; Check for digit
-    eor #$30
-    cmp #10
-    bcc @try_number
-    eor #$30
-    jmp @unknown
-    
-@try_number:
-    ; Pretty sure these are xterm codes, but we'll handle them..... *grumble*
-
-    ; A should have our decoded single digit.
-    sta TMP_A
-    jsr serial_recv_byte_sync
-
-    cmp #'~'
-    jmp @unknown
-
-    lda TMP_A
-
-    cmp #1 ; Home
-    beq @home_key
-
-    cmp #4
-    beq @end_key
-
-    jmp @unknown
-
-@try_extended_key:
-    jsr serial_recv_byte_sync
-
-    ;cmp #'P' ; F1
-    ;cmp #'Q' ; F2
-    ;cmp #'R' ; F3
-    ;cmp #'S' ; F4
-
-    ; MORE Arrow keys!
-    ;cmp #'A' ; Up
-    ;cmp #'B' ; Down
-    cmp #'C'
-    beq @right_key
-
-    cmp #'D'
-    beq @left_key
-    
-    ; Unknown escape sequence, ignore and continue.
-    jmp @unknown
+    ;bra @get_next_char
+    jmp @get_next_char
 
     rts
 
 ; ************************************************************************
 
-print_unknown:
-    phx
+print_line_data:
     phy
-    pha
 
-    lda #<unknown_msg
+    ; Send the first part of the buffer
+    ldy gap_start
+
+    lda #<buffer
     sta W0
-    lda #>unknown_msg
+    lda #>buffer
     sta W0 + 1
 
+    jsr serial_send_buffer
+
+    lda gap_end
+    adc W0 + 1
+    sta W0 + 1
+
+    ; Send until NULL character
     jsr serial_send_str
 
-    pla
     ply
-    plx
-
-    jsr serial_print_hex
-
     rts
 
 ; ************************************************************************
@@ -314,7 +269,6 @@ move_left:
 
 .segment "RODATA"
 
-unknown_msg:  .byte $D, "Unknown: ", $0
 escape_begin: .byte $1B, "[", $0
 
 ; ************************************************************************

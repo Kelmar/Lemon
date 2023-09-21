@@ -13,6 +13,7 @@
 .segment "CODE"
 
 .export byte2dec
+.export expmatch
 .export strcmp
 .export memcpy
 .export memcpy_down
@@ -84,6 +85,79 @@ byte2dec:
 dec_consts: .byte 128, 160, 200
 
 ; ************************************************************************
+; Checks if string in W0 matches a pattern in W1.
+;
+; Patterns are pretty basic:
+; # - Matches a digit
+; $ - Matches a letter
+; . - Matches any character
+; (everything else matches verbatim)
+;
+; Can't do length matching or anything really complicated.
+; 
+; Leaves the Z flag set if matching, unset if not.
+;
+; Destroys: A, Y
+;
+expmatch:
+    ldy #0
+
+@loop:
+    lda W1,y
+
+    cmp #'.'
+    beq @match_any
+
+    cmp #'#'
+    beq @match_digit
+
+    cmp #'$'
+    beq @match_letter
+
+    cmp W0,y
+    bne @done
+
+@match_any:
+    cmp #0
+    beq @done ; Reached end of strings
+
+@continue:
+    iny
+    bra @loop
+
+@match_digit:
+    lda W0,y
+    eor #$30
+    cmp #9
+    bcs @no_match ; Greater than 9 means not digit
+
+    iny
+    bra @loop
+
+@match_letter:
+    lda W0,y
+    cmp #'A'
+    bcc @no_match ; Less than 'A'
+    cmp #'Z'
+    bcc @continue ; Less than 'Z'
+    beq @continue ; Is 'Z'
+
+    cmp #'a'
+    bcc @no_match ; Less than 'a'
+    cmp #'z'
+    bcc @continue ; Less than 'z'
+    beq @continue ; Is 'z'
+
+    ; Not a letter
+
+@no_match:
+    ; Effectively clear the zero flag if set (no match)
+    lda #$FF
+
+@done:
+    rts
+
+; ************************************************************************
 ; Compares two NULL terminated strings W0 with W1.
 ;
 ; Sets status bits based on if they are equal or not.
@@ -109,7 +183,7 @@ strcmp:
 
     bra @cmp_loop
 
-@done
+@done:
     rts
 
 ; ************************************************************************
