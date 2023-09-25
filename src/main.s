@@ -9,10 +9,13 @@
 ; ************************************************************************
 
 .include "zp.inc"
+.include "via.inc"
 .include "serial.inc"
 
 .import editline
 .import ansi_recv
+
+.import via_init
 
 .segment "STARTUP"
 
@@ -23,13 +26,13 @@
     ldx #$FF
     txs
 
+    jsr via_init
     jsr serial_init
 
-    lda #<greeting
-    sta W0
-    lda #>greeting
-    sta W0 + 1
+    ; Enable interrupts
+    cli
 
+    LDW0_fast greeting
     jsr serial_send_str
 
     ldx #0
@@ -93,7 +96,32 @@
 ; Normal interrupt handler.
 
 irq_service:
-    ; For now we do nothing and return.
+    pha
+    phx
+    phy
+
+    lda #%00010000
+    bit VIA_IFR
+    beq @not_serial_isr
+
+    ;lda #'.'
+    ;jsr serial_send_byte
+
+    ; CB1 is set, which means our serial port has raised the interrupt.
+    jsr serial_isr
+
+@not_serial_isr:
+    ; Generic clear interrupt function.
+    lda VIA_T1CL
+    lda VIA_T2CL
+    lda VIA_SHIFT
+    lda VIA_IFR
+    lda VIA_PORT_A
+    lda VIA_PORT_B
+
+    ply
+    plx
+    pla
     rti
 
 ; ************************************************************************

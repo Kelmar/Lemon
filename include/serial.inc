@@ -8,6 +8,10 @@
 ; Copyright (c) 2023
 ; ************************************************************************
 
+.segment "CODE"
+
+.import serial_isr
+
 ; Initializes the UART
 ;
 ; Destroys: A
@@ -19,16 +23,27 @@
 ;
 .import serial_send_byte
 
-; Reads a single byte from the UART into the A register
-; Does not block, if a character is read then 1 is returned in the Y register
-; Otherwise 0 is returned to indicate no character read.
+; Reads a byte from the serial port's receive buffer without blocking.
+; 
+; If no byte is available then the carry flag is cleared.
 ;
-.import serial_recv_byte_async
+; Otherwise the carry flag is set, and the A register will hold the byte.
+;
+; Byte is returned in A register
+;
+.import serial_recv_byte
 
-; Receive a byte from the UART into the A register
-; Blocks until byte is received.
+; Serial receive byte but block until we get one.
 ;
-.import serial_recv_byte_sync
+; Byte is returned in A register
+;
+.import serial_recv_byte_block
+
+; Puts byte in A back into the serial buffer.
+;
+; Sets the carry bit if the byte was added, clear if not (buffer full)
+;
+.import serial_put_back
 
 ; Sends a null terminated string to the UART.
 ; String is pointed to by the W0 register

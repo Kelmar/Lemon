@@ -3,19 +3,27 @@
 ; Author: Bryce Simonds
 ; License: BSD 3-Clause
 ; File: serial.s
-; Description: Functions for working with 16550C serial port.
+; Description: Functions for working with 16C550C serial port.
 ;
 ; Copyright (c) 2023
 ; ************************************************************************
 
 .include "zp.inc"
+.include "buffer.inc"
+
+; ************************************************************************
 
 .segment "CODE"
 
 .export serial_init
+
+.export serial_recv_byte
+.export serial_recv_byte_block
+.export serial_put_back
+
+.export serial_isr
+
 .export serial_send_byte
-.export serial_recv_byte_async
-.export serial_recv_byte_sync
 .export serial_send_str
 .export serial_send_buffer
 .export serial_print_hex
@@ -55,13 +63,39 @@
 .define SERIAL_CONTROL_FLAGS %00001011
 
 ; ************************************************************************
+
+; High water mark in bytes for setting flow control off.
+; (We try to reserve a bit of extra room for calls to put_back)
+.define HI_WATER_MARK 224
+
+; Low water mark in bytes for setting flow control on.
+.define LO_WATER_MARK 128
+
+; ************************************************************************
+
+.segment "UARTVARS"
+
+; Receive buffer for UART data.
+uart_recv: .tag Buffer
+
+; ************************************************************************
+
+.segment "CODE"
+
+; ************************************************************************
 ; Initializes the UART
 ;
 ; Destroys: A
 
-.proc serial_init: near
+serial_init:
     ; Disable interrupts from 16550
     stz SERIAL_INT_CTL
+
+    ; Clear out all flow control
+    stz SERIAL_MOD_CTL
+
+    ; Initialize the receive buffer
+    buffer_init uart_recv
 
     ; Enable and reset FIFO
     lda #%00000111
@@ -82,8 +116,15 @@
     lda #SERIAL_CONTROL_FLAGS
     sta SERIAL_LINE_CTL
 
+    ; Allow flow control again
+    lda #%00001111
+    sta SERIAL_MOD_CTL
+
+    ; Enable receive interrupts
+    lda #%00000001
+    sta SERIAL_INT_CTL
+
     rts
-.endproc
 
 ; ************************************************************************
 ; Sends a single byte in A register to the UART
@@ -105,40 +146,118 @@
 .endproc
 
 ; ************************************************************************
-; Reads a single byte from the UART into the A register
-; Does not block, if a character is read then 1 is returned in the Y register
-; Otherwise 0 is returned to indicate no character read.
+; Reads a byte from the serial port's receive buffer without blocking.
+; 
+; If no byte is available then the carry flag is cleared.
+;
+; Otherwise the carry flag is set, and the A register will hold the byte.
+;
+; Byte is returned in A register
+;
+serial_recv_byte:
+    buffer_count uart_recv
+    beq @serial_empty
 
-.proc serial_recv_byte_async: near
-    lda #$01
-    and SERIAL_LINE_STAT
-    beq @no_char
+    cmp #LO_WATER_MARK
+    bcs @no_enable_recv
 
-    lda SERIAL_TRX
-    ldy #1
+    ; Turn flow on
+    lda #%00000010
+    ora SERIAL_MOD_CTL
+    sta SERIAL_MOD_CTL
 
-    jmp @done
-
-@no_char:
-    lda #0
-    ldy #0
-
-@done:
+@no_enable_recv:
+    buffer_read_byte uart_recv
+    sec
     rts
-.endproc
+
+@serial_empty:
+    ;lda #'X'
+    ;jsr serial_send_byte
+    clc
+    rts
 
 ; ************************************************************************
-; Receive a byte from the UART into the A register
-; Blocks until byte is received.
+; Serial receive byte but block until we get one.
+;
+; Byte is returned in A register
+;
+serial_recv_byte_block:
+    jsr serial_recv_byte
+    bcs @got_byte
 
-.proc serial_recv_byte_sync: near
-    lda #$01
-    and SERIAL_LINE_STAT
-    beq serial_recv_byte_sync ; Loop until we have byte
+    ; Block until interrupt from serial port
+    wai
+    bra serial_recv_byte_block ; Retry read
 
-    lda SERIAL_TRX  ; Read byte and return
+@got_byte:
     rts
-.endproc
+
+; ************************************************************************
+; Puts byte in A back into the serial buffer.
+;
+; Sets the carry bit if the byte was added, clear if not (buffer full)
+;
+
+serial_put_back:
+    pha
+    buffer_capacity uart_recv
+    bne @add_to_buffer
+    pla
+    clc
+    rts
+
+@add_to_buffer:
+    pla
+    buffer_put_back uart_recv
+    sec
+    rts
+
+; ************************************************************************
+; Serial port interrupt service routine.
+;
+
+serial_isr:
+    lda #%00000001
+    bit SERIAL_LINE_STAT
+    bne @read_loop
+
+    bra @check_send
+
+@read_loop:
+    ;lda #'.'
+    ;jsr serial_send_byte
+
+    buffer_capacity uart_recv
+    beq @buffer_full
+
+    cmp #HI_WATER_MARK
+    bcc @read_byte
+
+    ; Turn flow off
+    lda #%11111101
+    and SERIAL_MOD_CTL
+    sta SERIAL_MOD_CTL
+
+    bra @read_byte
+
+@buffer_full:
+    ; TODO: Turn off interrupts?
+
+    bra @check_send
+    
+@read_byte:
+    lda SERIAL_TRX
+    buffer_write uart_recv
+
+    lda #%00000001
+    bit SERIAL_LINE_STAT
+    bne @read_loop  ; Continue until we've read as much as we can.
+
+@check_send:
+    ; TODO: Push out send data here if ready to do so.
+
+    rts
 
 ; ************************************************************************
 ; Sends a null terminated string to the UART.

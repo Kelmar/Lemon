@@ -54,6 +54,21 @@
 
 ; ************************************************************************
 
+.macro LDW0_fast ptr
+    lda #<ptr
+    sta W0
+    lda #>ptr
+    sta W0 + 1
+.endmacro
+
+.macro LDW0 ptr
+    pha
+    LDW0_fast ptr
+    pla
+.endmacro
+
+; ************************************************************************
+
 .macro PHR0
     stx TMP_X
     sta TMP_A

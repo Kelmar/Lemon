@@ -16,8 +16,6 @@
 
 .export ansi_recv
 
-.import byte2dec
-
 ; ************************************************************************
 ; Read's one or more bytes from the UART and tries to process an escape
 ; sequence into something that is hopefully rational.
@@ -36,7 +34,7 @@ ansi_recv:
     ;jsr print_unknown
 
 @get_next_char:
-    jsr serial_recv_byte_sync
+    jsr serial_recv_byte_block
 
     cmp #27
     beq @state_esc
@@ -45,7 +43,7 @@ ansi_recv:
     rts
 
 @state_esc:
-    jsr serial_recv_byte_sync
+    jsr serial_recv_byte_block
     cmp #'['
     beq @state_esc_bracket
 
@@ -70,7 +68,7 @@ ansi_recv:
     bra @unknown
 
 @state_escape_O:
-    jsr serial_recv_byte_sync
+    jsr serial_recv_byte_block
 
     sec
     sbc #'A'
@@ -132,7 +130,7 @@ ansi_recv:
     bra @unknown
 
 @state_esc_bracket:
-    jsr serial_recv_byte_sync
+    jsr serial_recv_byte_block
 
     eor #$30
     cmp #10
@@ -161,7 +159,7 @@ ansi_recv:
     tay ; Save digit
 
     ; Verify we get the expected tilde
-    jsr serial_recv_byte_sync
+    jsr serial_recv_byte_block
     cmp #'~'
     beq @xterm_key_detected
     jmp @unknown

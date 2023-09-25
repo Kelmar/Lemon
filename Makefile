@@ -1,6 +1,6 @@
 SRCPATH=./src
 BUILDDIR=./build
-SRCS=main.s serial.s zp.s editline.s string.s ansi.s
+SRCS=main.s serial.s zp.s editline.s string.s ansi.s via.s
 
 AS=ca65
 CC=cc65
