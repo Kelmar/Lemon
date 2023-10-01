@@ -37,7 +37,7 @@
 ; ************************************************************************
 ; Gets the number of bytes that can still be written to the buffer.
 ;
-; Has the added side effect of setting the Z flag if the buffer is full.
+; Sets Z flag if the buffer is full.
 ;
 .macro buffer_capacity buffer
     buffer_count buffer

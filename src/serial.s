@@ -21,6 +21,9 @@
 .export serial_recv_byte_block
 .export serial_put_back
 
+.export serial_write_async
+.export serial_write_block
+
 .export serial_isr
 
 .export serial_send_byte
@@ -77,6 +80,7 @@
 
 ; Receive buffer for UART data.
 uart_recv: .tag Buffer
+uart_send: .tag Buffer
 
 ; ************************************************************************
 
@@ -96,6 +100,7 @@ serial_init:
 
     ; Initialize the receive buffer
     buffer_init uart_recv
+    buffer_init uart_send
 
     ; Enable and reset FIFO
     lda #%00000111
@@ -129,7 +134,7 @@ serial_init:
 ; ************************************************************************
 ; Sends a single byte in A register to the UART
 ; Blocks until the UART's fifo is empty.
-
+;
 .proc serial_send_byte: near
     pha ; Save the byte
 
@@ -172,8 +177,6 @@ serial_recv_byte:
     rts
 
 @serial_empty:
-    ;lda #'X'
-    ;jsr serial_send_byte
     clc
     rts
 
@@ -194,7 +197,7 @@ serial_recv_byte_block:
     rts
 
 ; ************************************************************************
-; Puts byte in A back into the serial buffer.
+; Puts byte in A back into the serial receive buffer.
 ;
 ; Sets the carry bit if the byte was added, clear if not (buffer full)
 ;
@@ -214,20 +217,104 @@ serial_put_back:
     rts
 
 ; ************************************************************************
+; Writes a buffer at W0 to the serial port.
+; Length of the buffer should be in Y register.
+; 
+; If writing would block, then the function tries to write as many bytes as
+; it can and then returns the number of bytes sent in Y.
+;
+; The carry flag will be set if not all data could be sent.
+;
+; Destroys: R0, a, x, y
+;
+
+serial_write_async:
+    cpy #0
+    beq @done ; Buffer emtpy
+
+    sty R0
+    ldy #0
+
+    sei
+
+    ; Enable send interrupts
+    lda #%00000011
+    sta SERIAL_INT_CTL
+
+@write_loop:
+    buffer_capacity uart_send
+    beq @send_full
+
+    lda (W0), y
+
+    buffer_write uart_send
+
+    iny
+    cpy R0
+    bcc @write_loop
+
+@done:
+    cli
+    clc
+    rts
+
+@send_full:
+    cli
+    sec
+    rts
+
+
+; ************************************************************************
+; Writes buffer at W0 to the serial port.
+; Length of buffer should be in Y register.
+;
+; Blocks if the send buffer is full.
+; 
+; Destroys: R0, R1, W0
+;
+serial_write_block:
+    sty R0
+
+    PHR0
+
+    jsr serial_write_async
+    bcc @done
+
+    ; Y will have number of bytes written.
+
+    PLR0
+
+    ; Adjust the buffer offset
+    clc
+    sty R1
+    lda W0
+    adc R1
+    bcc @no_carry
+    inc W0 + 1      ; Add to the high byte.
+@no_carry:
+
+    ; Adjust the length
+    sec
+    lda R0
+    sbc R1
+
+    ; Block until next interrupt when we have a chance to send more data.
+    wai
+    bra serial_write_block
+
+@done:
+    rts
+
+; ************************************************************************
 ; Serial port interrupt service routine.
 ;
 
 serial_isr:
     lda #%00000001
     bit SERIAL_LINE_STAT
-    bne @read_loop
-
-    bra @check_send
+    beq @check_send
 
 @read_loop:
-    ;lda #'.'
-    ;jsr serial_send_byte
-
     buffer_capacity uart_recv
     beq @buffer_full
 
@@ -255,8 +342,39 @@ serial_isr:
     bne @read_loop  ; Continue until we've read as much as we can.
 
 @check_send:
-    ; TODO: Push out send data here if ready to do so.
+    ; Validate that we can send data
+    lda #%00010000
+    bit SERIAL_MOD_STAT
+    bne @check_send_buffer
+    rts ; CTS is inactive, block sending until it is clear.
 
+@check_send_buffer:
+    lda #$20
+    and SERIAL_LINE_STAT
+    bne @send_loop_start
+    rts ; FIFO has characters, don't send more until empty.
+
+@send_loop_start:
+    ; Not quite the full size of the FIFO
+    ldy #15
+
+@send_loop:
+    buffer_count uart_send
+    bne @send_data
+
+    ; No data left to send, disable send interrupts
+    lda #%00000001
+    sta SERIAL_INT_CTL
+
+    rts 
+
+@send_data:
+    buffer_read_byte uart_send
+    sta SERIAL_TRX
+    dey
+    bne @send_loop
+
+    ; We've filled the UART's FIFO, try again later.
     rts
 
 ; ************************************************************************

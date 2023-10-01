@@ -14,6 +14,7 @@
 
 .export byte2dec
 .export expmatch
+.export strlen
 .export strcmp
 .export memcpy
 .export memcpy_down
@@ -155,6 +156,30 @@ expmatch:
     lda #$FF
 
 @done:
+    rts
+
+; ************************************************************************
+; Returns the length of a null terminated string in W0.
+;
+; Length is returned in Y register.
+;
+; If Y is zero then the length is longer than 255 bytes.
+;
+strlen:
+    pha
+    ldy #0
+
+@cmp_loop:
+    lda (W0), y
+    beq @done
+    iny
+    beq @overflow
+    bra @cmp_loop
+
+@overflow:
+
+@done:
+    pla
     rts
 
 ; ************************************************************************
