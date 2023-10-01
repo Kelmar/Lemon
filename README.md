@@ -11,7 +11,7 @@ A (not so) basic monitor program for my 6502 build.
 - [ ] Binary execution
 - [ ] Disassembler?
 - [ ] Generic driver model?
-  So people can use something other than th 16C550C
+  So people can use something other than the 16C550C
 
 ## Zero page mapping
 | ZP | Description                      |
