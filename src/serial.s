@@ -21,15 +21,15 @@
 .export serial_recv_byte_block
 .export serial_put_back
 
+.export serial_write_byte_block
+
 .export serial_write_async
 .export serial_write_block
 
 .export serial_isr
 
-.export serial_send_byte
-.export serial_send_str
-.export serial_send_buffer
-.export serial_print_hex
+; TODO: Remove these in favor of more generic methods later.
+.export serial_print_str
 
 ; ************************************************************************
 
@@ -66,6 +66,9 @@
 .define SERIAL_CONTROL_FLAGS %00001011
 
 ; ************************************************************************
+
+; Number of bytes on the UART's FIFO.
+.define FIFO_SIZE 15
 
 ; High water mark in bytes for setting flow control off.
 ; (We try to reserve a bit of extra room for calls to put_back)
@@ -130,25 +133,6 @@ serial_init:
     sta SERIAL_INT_CTL
 
     rts
-
-; ************************************************************************
-; Sends a single byte in A register to the UART
-; Blocks until the UART's fifo is empty.
-;
-.proc serial_send_byte: near
-    pha ; Save the byte
-
-@tx_delay:
-    ; Wait for any data in the TX FIFO to clear out.
-    lda #$20
-    and SERIAL_LINE_STAT
-    beq @tx_delay
-
-    pla
-    sta SERIAL_TRX
-
-    rts
-.endproc
 
 ; ************************************************************************
 ; Reads a byte from the serial port's receive buffer without blocking.
@@ -217,25 +201,65 @@ serial_put_back:
     rts
 
 ; ************************************************************************
+; Write a single byte in A to serial port.
+; Blocks if FIFO is full.
+;
+; Destroys: X
+;
+serial_write_byte_block:
+    php
+    pha
+
+@retry_write:
+    ; Disable global interrupts while we mess with the buffer
+    sei
+
+    ; Enable send interrupts
+    lda #%00000011
+    sta SERIAL_INT_CTL
+
+    buffer_capacity uart_send
+    beq @wait
+
+    pla
+
+    buffer_write uart_send
+    bra @done
+
+@wait:
+    ; Enable global interrupts until some bytes are flushed out.
+    cli
+
+    ; Block until next interrupt when we have a chance to send more data.
+    wai
+    bra @retry_write
+
+@done:
+    plp
+    rts
+
+; ************************************************************************
 ; Writes a buffer at W0 to the serial port.
 ; Length of the buffer should be in Y register.
 ; 
 ; If writing would block, then the function tries to write as many bytes as
-; it can and then returns the number of bytes sent in Y.
+; it can and then returns the number of bytes written in Y
 ;
-; The carry flag will be set if not all data could be sent.
-;
-; Destroys: R0, a, x, y
+; Destroys: a, x, y
 ;
 
 serial_write_async:
+    PHR0_fast
+
+    ; Disable global interrupts while writing to buffer
+    php
+    sei
+
     cpy #0
-    beq @done ; Buffer emtpy
+    beq @done ; Buffer empty
 
     sty R0
     ldy #0
-
-    sei
 
     ; Enable send interrupts
     lda #%00000011
@@ -243,7 +267,7 @@ serial_write_async:
 
 @write_loop:
     buffer_capacity uart_send
-    beq @send_full
+    beq @done
 
     lda (W0), y
 
@@ -251,18 +275,14 @@ serial_write_async:
 
     iny
     cpy R0
-    bcc @write_loop
+    bne @write_loop
 
 @done:
-    cli
-    clc
-    rts
+    ; Re-enable global interrupts to let buffer clear out.
+    plp
 
-@send_full:
-    cli
-    sec
+    PLR0_fast
     rts
-
 
 ; ************************************************************************
 ; Writes buffer at W0 to the serial port.
@@ -270,33 +290,34 @@ serial_write_async:
 ;
 ; Blocks if the send buffer is full.
 ; 
-; Destroys: R0, R1, W0
+; Destroys: R0, R1, W0, a, y
 ;
 serial_write_block:
+    ; Preserve length for later calculation.
     sty R0
 
-    PHR0
-
     jsr serial_write_async
-    bcc @done
 
-    ; Y will have number of bytes written.
-
-    PLR0
+    ; Y will have bytes written
+    cpy R0
+    beq @done ; All bytes written
 
     ; Adjust the buffer offset
-    clc
+
     sty R1
+
+    clc
     lda W0
     adc R1
     bcc @no_carry
     inc W0 + 1      ; Add to the high byte.
 @no_carry:
 
-    ; Adjust the length
+    ; Compute number of bytes remaining
     sec
     lda R0
     sbc R1
+    tay
 
     ; Block until next interrupt when we have a chance to send more data.
     wai
@@ -378,127 +399,28 @@ serial_isr:
     rts
 
 ; ************************************************************************
-; Sends a null terminated string to the UART.
-; String is pointed to by the W0 register
-; String cannot be longer than 255 bytes.
-; Method blocks
+; Prints a Pascal string located at W0 to the serial terminal
 ;
-; Destroys: A, Y, X
-
-.proc serial_send_str: near
-    ldy #0
-
-@tx_delay:
-    ; Wait for any data in the TX FIFO to clear out.
-    lda #$20
-    and SERIAL_LINE_STAT
-    beq @tx_delay
-
-    ; Not quite the full size of the FIFO
-    ldx #15
-
-@tx_loop_send:
-    lda (W0),y          ; Load next character
-    beq @tx_exit        ; Exit if we've hit the NULL character
-    sta SERIAL_TRX      ; Write character to TRX port.
-    iny
-    dex
-    beq @tx_delay       ; We've possibly filled the TX buffer, wait for it to empty.
-    jmp @tx_loop_send
-
-@tx_exit:
-    rts
-.endproc
-
-; ************************************************************************
-; Sends a byte buffer to the UART.
-; Buffer is pointed to by the W0 register
-; Buffer length is in the Y register.
-; Method blocks
-;
-; Destroys: A
-
-.proc serial_send_buffer: near
-    phx
-    PHR0_fast
-    
-    ; I'd kill for a nice DMA to do this. :3
-
-    tya
-    tax
-
-    beq @tx_exit        ; No data to send
-
-    ldy #0
-
-@tx_delay:
-    ; Wait for any data in the TX FIFO to clear out.
-    lda #$20
-    and SERIAL_LINE_STAT
-    beq @tx_delay
-
-    ; Not quite the full size of the FIFO
-    lda #15
-    sta R0
-
-@tx_loop_send:
-    lda (W0),y          ; Load next character
-    sta SERIAL_TRX      ; Write character to TRX port.
-    iny
-    dex
-    beq @tx_exit        ; Reached end of buffer, exit.
-    dec R0
-    beq @tx_delay       ; We've possibly filled the TX buffer, wait for it to empty.
-    jmp @tx_loop_send
-
-@tx_exit:
-
-    PLR0
-    plx
-    rts
-.endproc
-
-; ************************************************************************
-; Prints the A register as a 2-digit hex number
+; TODO: Remove later in favor of a more generalized approach.
 ;
 ; Destroys: W0
-
-serial_print_hex:
-    phx
-    phy
-
-    ldx #<hexbytes
-    stx W0
-    ldx #>hexbytes
-    stx W0 + 1
-
-    tax ; Preserve A
-
-    ror
-    ror
-    ror
-    ror
-    and #$0F
-
-    tay
+;
+serial_print_str:
+    ; Get length into Y
+    ldy #0
     lda (W0), y
-    jsr serial_send_byte
-
-    txa
-    and #$0F
-
     tay
-    lda (W0), y
-    jsr serial_send_byte
 
-    ply
-    plx
+    ; Adjust pointer
+    clc
+    inc W0
+    bcc @send_buffer
+    inc W0 + 1
+@send_buffer:
+
+    ; Print raw buffer to serial port.
+    jsr serial_write_block
+
     rts
-
-; ************************************************************************
-
-.segment "RODATA"
-
-hexbytes:     .byte "0123456789ABCDEF"
-
+    
 ; ************************************************************************

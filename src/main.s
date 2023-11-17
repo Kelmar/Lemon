@@ -13,8 +13,6 @@
 .include "serial.inc"
 
 .import editline
-.import ansi_recv
-.import strlen
 
 .import via_init
 
@@ -24,6 +22,7 @@
 
 .proc start: near
     ; Initialize the stack
+    sei
     ldx #$FF
     txs
 
@@ -34,52 +33,15 @@
     cli
 
     LDW0_fast greeting
-    jsr strlen
-    jsr serial_write_async
-
-    ;jsr serial_send_str
+    jsr serial_print_str
 
     ldx #0
 
 @main_loop:
-    ;LDW0_fast prompt
-    ;jsr serial_send_str
+    LDW0_fast prompt
+    jsr serial_print_str
 
-    ;jsr editline
-
-    jsr ansi_recv
-
-    bcs @special_key
-
-    pha
-
-    LDW0_fast normal
-    jsr serial_send_str
-
-    pla
-
-    ; Print the normal character
-    jsr serial_send_byte
-
-    bra @done
-
-@special_key:
-    pha
-
-    LDW0_fast special
-    jsr serial_send_str
-
-    pla
-
-    ; Print the special key code number
-    jsr serial_print_hex
-
-    bra @done
-
-@done:
-    ; Move to next line
-    lda #$D
-    jsr serial_send_byte
+    jsr editline
 
     bra @main_loop
 
@@ -136,9 +98,9 @@ nmi_service:
 .segment "RODATA"
 
 ; Greeting also contains reset codes for terminal
-greeting: .byte $1B, "c", $1B, "[2jLemon v0.1.3", $D, $0
-prompt  : .byte "> ", $0
-special : .byte "Special: ", $0
-normal  : .byte "Normal : ", $0
+greeting: .byte $13, $1B, "c", $1B, "[2jLemon v0.1.4", $D
+prompt  : .byte $02, "> "
+special : .byte $0A, "Special: "
+normal  : .byte $0A, "Normal : "
 
 ; ************************************************************************

@@ -23,12 +23,6 @@
 .import serial_init
 
 ; ************************************************************************
-; Sends a single byte in A register to the UART
-; Blocks until the UART's fifo is empty.
-;
-.import serial_send_byte
-
-; ************************************************************************
 ; Reads a byte from the serial port's receive buffer without blocking.
 ; 
 ; If no byte is available then the carry flag is cleared.
@@ -47,11 +41,25 @@
 .import serial_recv_byte_block
 
 ; ************************************************************************
+; Prints a Pascal string at W0 to the serial terminal
+;
+; Destroys: W0
+;
+.import serial_print_str
+
+; ************************************************************************
 ; Puts byte in A back into the serial buffer.
 ;
 ; Sets the carry bit if the byte was added, clear if not (buffer full)
 ;
 .import serial_put_back
+
+; ************************************************************************
+; Writes a single byte to the serial buffer.
+;
+; Method will block until there is free space to write to.
+;
+.import serial_write_byte
 
 ; ************************************************************************
 ; Writes a buffer at W0 to the serial port.
@@ -75,31 +83,5 @@
 ; Destroys: R0, R1, W0
 ;
 .import serial_write_block
-
-; ************************************************************************
-; Sends a null terminated string to the UART.
-; String is pointed to by the W0 register
-; String cannot be longer than 255 bytes.
-; Method blocks
-;
-; Destroys: A, Y, X
-;
-.import serial_send_str
-
-; ************************************************************************
-; Sends a byte buffer to the UART.
-; Buffer is pointed to by the W0 register
-; Buffer length is in the Y register.
-; Method blocks
-;
-; Destroys: A, Y, X
-; 
-.import serial_send_buffer
-
-; ************************************************************************
-; Sends the A register as a 2-digit hex number
-;
-; Destroys: W0
-.import serial_print_hex
 
 ; ************************************************************************
