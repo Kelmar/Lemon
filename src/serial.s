@@ -245,11 +245,12 @@ serial_write_byte_block:
 ; If writing would block, then the function tries to write as many bytes as
 ; it can and then returns the number of bytes written in Y
 ;
-; Destroys: a, x, y
+; Destroys: a, y
 ;
 
 serial_write_async:
     PHR0_fast
+    phx
 
     ; Disable global interrupts while writing to buffer
     php
@@ -281,6 +282,7 @@ serial_write_async:
     ; Re-enable global interrupts to let buffer clear out.
     plp
 
+    plx
     PLR0_fast
     rts
 
@@ -290,9 +292,12 @@ serial_write_async:
 ;
 ; Blocks if the send buffer is full.
 ; 
-; Destroys: R0, R1, W0, a, y
+; Destroys: W0, a, y
 ;
 serial_write_block:
+    PHR0_fast
+    PHR1_fast
+
     ; Preserve length for later calculation.
     sty R0
 
@@ -324,6 +329,8 @@ serial_write_block:
     bra serial_write_block
 
 @done:
+    PLR1_fast
+    PLR0_fast
     rts
 
 ; ************************************************************************
@@ -331,6 +338,8 @@ serial_write_block:
 ;
 
 serial_isr:
+    phy
+
     lda #%00000001
     bit SERIAL_LINE_STAT
     beq @check_send
@@ -396,6 +405,7 @@ serial_isr:
     bne @send_loop
 
     ; We've filled the UART's FIFO, try again later.
+    ply
     rts
 
 ; ************************************************************************

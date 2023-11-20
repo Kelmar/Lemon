@@ -8,6 +8,9 @@
 ; Copyright (c) 2023
 ; ************************************************************************
 
+; The following register are defined at fixed locations for other programs 
+; to be able to use as well.
+
 ; RAM and ROM banks not yet implemented.
 
 ; Address of RAM bank register
@@ -49,6 +52,14 @@
 ; 32-bit parameter
 .define Q1 $12
 
+; 32-bit - System tick counter.
+.define SYS_TICKS $16
+
+; ************************************************************************
+
+; We let the assembler decide where these are, these are used as scratch
+; space for various operations.
+
 ; Scratch space for saving the A register.
 .importzp TMP_A
 
@@ -81,14 +92,16 @@
     sta wd
 .endmacro
 
+; ************************************************************************
+
 .macro LDW0_fast ptr
     LD_word_fast W0, ptr
 .endmacro
 
 .macro LDW0 ptr
-    pha
+    sta TMP_A
     LD_word_fast W0, ptr
-    pla
+    lda TMP_A
 .endmacro
 
 .macro PHW0_fast
@@ -97,6 +110,24 @@
 
 .macro PLW0_fast
     PL_word_fast W0
+.endmacro
+
+.macro LDW1_fast ptr
+    LD_word_fast W1, ptr
+.endmacro
+
+.macro LDW1 ptr
+    sta TMP_A
+    LD_word_fast W1, ptr
+    lda TMP_A
+.endmacro
+
+.macro PHW1_fast
+    PH_word_fast W1
+.endmacro
+
+.macro PLW1_fast
+    PL_word_fast W1
 .endmacro
 
 ; ************************************************************************
@@ -139,6 +170,14 @@
 
 .macro PLR0_fast
     PL_byte_fast R0
+.endmacro
+
+.macro PHR1_fast
+    PH_byte_fast R1
+.endmacro
+
+.macro PLR1_fast
+    PH_byte_fast R1
 .endmacro
 
 ; ************************************************************************

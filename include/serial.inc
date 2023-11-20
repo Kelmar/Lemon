@@ -80,8 +80,25 @@
 ;
 ; Blocks if the send buffer is full.
 ; 
-; Destroys: R0, R1, W0
+; Destroys: W0, a, y
 ;
 .import serial_write_block
+
+; ************************************************************************
+; Write a single byte in A to serial port.
+; Blocks if FIFO is full.
+;
+; Destroys: X
+;
+.import serial_write_byte_block
+
+; ************************************************************************
+; Prints a Pascal string located at W0 to the serial terminal
+;
+; TODO: Remove later in favor of a more generalized approach.
+;
+; Destroys: W0
+;
+.import serial_print_str
 
 ; ************************************************************************

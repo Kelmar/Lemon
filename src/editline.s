@@ -82,7 +82,7 @@ editline:
     inx
 
     ; Echo the character back to the user
-    jsr serial_send_byte
+    jsr serial_write_byte_block
 
 @state_special_key:
     cmp KEY_LEFT
@@ -102,7 +102,7 @@ editline:
 
 @enter_key:
     ; TODO: Finalize buffer and return it to the caller.
-    jsr serial_send_byte
+    jsr serial_write_byte_block
     rts
 
 @backspace_key:
@@ -111,7 +111,7 @@ editline:
 
     ; Delete characters to the left of the cursor.
     lda #8
-    jsr serial_send_byte
+    jsr serial_write_byte_block
 
     bra @get_next_char
 
@@ -180,20 +180,15 @@ print_line_data:
 
     ; Send the first part of the buffer
     ldy gap_start
-
-    lda #<buffer
-    sta W0
-    lda #>buffer
-    sta W0 + 1
-
-    jsr serial_send_buffer
+    LDW0_fast buffer
+    jsr serial_write_block
 
     lda gap_end
     adc W0 + 1
     sta W0 + 1
 
     ; Send until NULL character
-    jsr serial_send_str
+    jsr serial_print_str
 
     ply
     rts
@@ -205,27 +200,21 @@ move_right:
     phy
     pha
 
-    lda #<escape_begin
-    sta W0
-    lda #>escape_begin
-    sta W0 + 1
+    LDW0_fast escape_begin
 
-    jsr serial_send_str
+    jsr serial_print_str
 
     ldy #0
-    
-    lda #<ansicode
-    sta W0
-    lda #>ansicode
-    sta W0 + 1
+
+    LDW0_fast ansicode
 
     pla
 
     jsr byte2dec
-    jsr serial_send_str
+    jsr serial_print_str
 
     lda #'C'
-    jsr serial_send_byte
+    jsr serial_write_byte_block
 
     ply
     plx
@@ -239,27 +228,20 @@ move_left:
 
     pha
 
-    lda #<escape_begin
-    sta W0
-    lda #>escape_begin
-    sta W0 + 1
-
-    jsr serial_send_str
+    LDW0_fast escape_begin
+    jsr serial_print_str
 
     ldy #0
 
-    lda #<ansicode
-    sta W0
-    lda #>ansicode
-    sta W0 + 1
+    LDW0_fast ansicode
 
     pla
 
     jsr byte2dec
-    jsr serial_send_str
+    jsr serial_print_str
 
     lda #'D'
-    jsr serial_send_byte
+    jsr serial_write_byte_block
 
     ply
     plx

@@ -174,22 +174,23 @@ ansi_recv:
 
 print_unknown:
     pha
-    lda #<unknown_msg
-    sta W0
-    lda #>unknown_msg
-    sta W0 + 1
 
-    jsr serial_send_str
+    LDW0_fast unknown_msg
+    jsr serial_print_str
+
     pla
 
-    jsr serial_send_byte
+    jsr serial_write_byte_block
 
     pha
+
     lda #' '
-    jsr serial_send_byte
+    jsr serial_write_byte_block
+
     pla
     
-    jsr serial_print_hex
+    ; TODO: make replacement for this.
+    ;jsr serial_print_hex
 
     rts
 

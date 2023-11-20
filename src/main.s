@@ -10,11 +10,10 @@
 
 .include "zp.inc"
 .include "via.inc"
+.include "via_imports.inc"
 .include "serial.inc"
 
 .import editline
-
-.import via_init
 
 .segment "STARTUP"
 
@@ -55,14 +54,25 @@ irq_service:
     phx
     phy
 
-    lda #%00010000
-    bit VIA_IFR
+    lda VIA_IFR
+    tay ; Preserve the bits while we check to see what's enabled.
+
+    and #%00010000
     beq @not_serial_isr
 
     ; CB1 is set, which means our serial port has raised the interrupt.
     jsr serial_isr
 
 @not_serial_isr:
+
+    tya ; Restore bits
+    and #%00100000
+    beq @isr_done
+
+    ; Timer2 is set, handle system ticks
+    jsr via_timer_isr
+
+@isr_done:
     ; Generic clear interrupt function.
     lda VIA_T1CL
     lda VIA_T2CL

@@ -14,6 +14,8 @@
 
 .segment "ZEROPAGE"
 
+; ************************************************************************
+
 ; Scratch space for preserving A register
 TMP_A: .res 1
 
