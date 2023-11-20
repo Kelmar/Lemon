@@ -23,7 +23,11 @@
 .define TIMER_COUNT $03E8
 
 ; ************************************************************************
-
+; Initializes the VIA for our use.
+; 
+; This sets up a periodic timer triggered from the PB6 pin, and interrupts
+; off of CB1 which come in from the 16C550C.
+;
 via_init:
     ; Disable all interrupts
     lda #%01111111
@@ -65,7 +69,8 @@ via_init:
     rts
 
 ; ************************************************************************
-; Handle timer ISR
+; Handles timer ISR
+;
 via_timer_isr:
     lda VIA_IFR
 

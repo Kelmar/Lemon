@@ -34,8 +34,6 @@
     LDW0_fast greeting
     jsr serial_print_str
 
-    ldx #0
-
 @main_loop:
     LDW0_fast prompt
     jsr serial_print_str
@@ -108,7 +106,7 @@ nmi_service:
 .segment "RODATA"
 
 ; Greeting also contains reset codes for terminal
-greeting: .byte $13, $1B, "c", $1B, "[2jLemon v0.1.4", $D
+greeting: .byte $13, $1B, "c", $1B, "[2jLemon v0.1.5", $D
 prompt  : .byte $02, "> "
 special : .byte $0A, "Special: "
 normal  : .byte $0A, "Normal : "
